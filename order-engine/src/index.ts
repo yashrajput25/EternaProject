@@ -11,6 +11,10 @@ import { orderQueue } from "./services/OrderQueue";
 const server = Fastify({ logger: true });
 server.register(websocketPlugin);
 
+server.get("/", async (request, reply) => {
+    return reply.send({ message: "Order Execution Engine API is live!" });
+    });
+
 // test route
 server.register(pingRoute, { prefix: "/api" });
 server.register(orderRoute, { prefix: "/api" });
