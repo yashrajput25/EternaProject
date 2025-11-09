@@ -1,48 +1,68 @@
-    import { Queue, Worker, Job } from "bullmq";
-    import { sleep } from "../utils/helpers";
-    import MockDexRouter from "./MockDexRouter";
-    import { sendUpdate } from "../utils/webSocketManager";
-    import { AppDataSource } from "../config/db";
-    import { Order } from "../entities/Order";
+import dotenv from "dotenv";
+dotenv.config();
 
-    const connection = { host: "127.0.0.1", port: 6379 };
+console.log("🧩 Redis URL:", process.env.UPSTASH_REDIS_REST_URL);
+console.log(
+  "🧩 Redis Token:",
+  process.env.UPSTASH_REDIS_REST_TOKEN ? "Loaded ✅" : "❌ Missing"
+);
 
-    export interface OrderJob {
-    orderId: string;
-    tokenIn: string;
-    tokenOut: string;
-    amount: number;
-    }
+import { Queue, Worker, Job } from "bullmq";
+import { sleep } from "../utils/helpers";
+import MockDexRouter from "./MockDexRouter";
+import { sendUpdate } from "../utils/webSocketManager";
+import { AppDataSource } from "../config/db";
+import { Order } from "../entities/Order";
+import IORedis from "ioredis";
 
-    export class OrderQueue {
-    queue: Queue;
-    worker: Worker;
-    router: MockDexRouter;
+// ✅ Upstash Redis connection configuration for BullMQ
+const redisConnection = new IORedis(
+  process.env.UPSTASH_REDIS_REST_URL!.replace("https://", "rediss://"),
+  {
+    password: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+    tls: {},
+  }
+);
 
-    constructor() {
-        this.queue = new Queue<OrderJob>("orders", { connection });
-        this.router = new MockDexRouter();
+const connection = redisConnection;
 
-        // ✅ Initialize DB once to avoid metadata errors
-        if (!AppDataSource.isInitialized) {
-        AppDataSource.initialize()
-            .then(() => console.log("✅ DB ready for OrderQueue"))
-            .catch(console.error);
-        }
+export interface OrderJob {
+  orderId: string;
+  tokenIn: string;
+  tokenOut: string;
+  amount: number;
+}
 
-        this.worker = new Worker<OrderJob, any>(
+export class OrderQueue {
+  queue: Queue;
+  worker!: Worker;
+  router: MockDexRouter;
+
+  constructor() {
+    this.queue = new Queue<OrderJob>("orders", { connection });
+    this.router = new MockDexRouter();
+
+    (async () => {
+      if (!AppDataSource.isInitialized) {
+        await AppDataSource.initialize();
+        console.log("✅ DB ready for OrderQueue");
+      }
+
+      // Worker starts only after DB initialization
+      this.worker = new Worker<OrderJob, any>(
         "orders",
         async (job: Job<OrderJob>) => {
-            if (!job) return;
+          if (!job) return;
 
-            const repo = AppDataSource.getRepository(Order);
-            const { orderId, tokenIn, tokenOut, amount } = job.data;
+          const repo = AppDataSource.getRepository(Order);
+          const { orderId, tokenIn, tokenOut, amount } = job.data;
 
-            // Create DB entry for this order
-            const dbOrder = repo.create({ orderId, tokenIn, tokenOut, amount, status: "pending" });
-            await repo.save(dbOrder);
+          const dbOrder = repo.create({ orderId, tokenIn, tokenOut, amount, status: "pending" });
+          await repo.save(dbOrder);
 
-            try {
+          try {
             console.log(`🔁 Processing order: ${orderId}`);
             sendUpdate(orderId, { status: "pending" });
 
@@ -54,9 +74,9 @@
 
             const bestQuote = await this.router.getBestQuote(job.data);
             sendUpdate(orderId, {
-                status: "best_dex",
-                dex: bestQuote.dex,
-                price: bestQuote.price,
+              status: "best_dex",
+              dex: bestQuote.dex,
+              price: bestQuote.price,
             });
 
             await sleep(1000);
@@ -72,9 +92,9 @@
             const result = await this.router.executeSwap(job.data, bestQuote.dex);
 
             sendUpdate(orderId, {
-                status: "confirmed",
-                txHash: result.txHash,
-                dex: result.dex,
+              status: "confirmed",
+              txHash: result.txHash,
+              dex: result.dex,
             });
 
             dbOrder.status = "confirmed";
@@ -84,37 +104,38 @@
 
             console.log(`✅ Order ${orderId} completed on ${result.dex}`);
             return dbOrder;
-            } catch (err: any) {
+          } catch (err: any) {
             dbOrder.status = "failed";
             dbOrder.error = err.message;
             await repo.save(dbOrder);
             console.error(`❌ Order ${orderId} failed: ${err.message}`);
             sendUpdate(orderId, { status: "failed", error: err.message });
             throw err;
-            }
+          }
         },
         {
-            connection,
-            concurrency: 10,
+          connection,
+          concurrency: 10,
         }
-        );
+      );
 
-        this.worker.on("failed", (job, err) => {
+      this.worker.on("failed", (job, err) => {
         if (!job) return;
         console.error(`❌ Order ${job.data.orderId} failed: ${err.message}`);
         sendUpdate(job.data.orderId, {
-            status: "failed",
-            error: err.message,
+          status: "failed",
+          error: err.message,
         });
-        });
-    }
+      });
+    })();
+  }
 
-    async addOrder(order: OrderJob) {
-        await this.queue.add(order.orderId, order, {
-        attempts: 3,
-        backoff: { type: "exponential", delay: 2000 },
-        });
-    }
-    }
+  async addOrder(order: OrderJob) {
+    await this.queue.add(order.orderId, order, {
+      attempts: 3,
+      backoff: { type: "exponential", delay: 2000 },
+    });
+  }
+}
 
-    export const orderQueue = new OrderQueue();
+export const orderQueue = new OrderQueue();
