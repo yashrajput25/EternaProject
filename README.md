@@ -1,9 +1,8 @@
 # Order Execution Engine (Mock Implementation)
 
-##  Overview
+## Overview
 
-This project implements a **Market Order Execution Engine** with real-time WebSocket updates, concurrent queue processing, and DEX routing between **Raydium** and **Meteora** (mocked).
-It is built using **Node.js, TypeScript, Fastify, BullMQ, Redis, and PostgreSQL**.
+This project implements a **Market Order Execution Engine** with real-time WebSocket updates, concurrent queue processing, and DEX routing between **Raydium** and **Meteora** (mocked). It is built using **Node.js, TypeScript, Fastify, BullMQ, Redis, and PostgreSQL**.
 
 ---
 
@@ -18,32 +17,49 @@ It is built using **Node.js, TypeScript, Fastify, BullMQ, Redis, and PostgreSQL*
 | WebSockets       | @fastify/websocket                        |
 | DEX Router       | Mock implementation for Raydium & Meteora |
 | Containerization | Docker (Redis + Postgres)                 |
+| Deployment       | Render                                    |
 
 ---
 
-##  Chosen Order Type — Market Order
+## Order Type Chosen — Market Order
 
-This engine implements **Market Orders**, which execute immediately at the current market price.
-It can easily be extended to support:
+The engine implements **Market Orders**, which execute immediately at the best available market price.
 
-* **Limit Orders** → add price threshold validation before execution.
-* **Sniper Orders** → trigger execution based on token launch or external events.
+### Why Market Orders?
 
----
+Market Orders are the most direct way to demonstrate the **core system architecture** — from queue management and routing to live WebSocket updates. Since they execute instantly, they simplify validation of order flow and concurrency while maintaining realistic DEX behavior.
 
-##  Features
+### How Other Orders Can Be Added
 
-REST API for order submission (`POST /api/orders/execute`)
-WebSocket updates for real-time order status
-DEX router that selects the best quote (Raydium vs Meteora)
-BullMQ queue for concurrent order processing (10 at once)
-Retry with exponential backoff on failures
-PostgreSQL persistence for every order and status change
-Clear modular code structure (routes, services, utils)
+* **Limit Orders** → Add a price-check condition before execution (execute only when market price ≥ target price).
+* **Sniper Orders** → Extend with event triggers (e.g., token launch or liquidity pool creation).
 
 ---
 
-##  Architecture Overview
+## Branching Strategy
+
+The repository uses **two branches**:
+
+* **`main`** → Development branch containing local setup and test configurations.
+* **`deployed_branch`** → Deployment-ready branch hosted on **Render**, containing environment configurations and optimizations for cloud runtime.
+
+All deployment-related fixes, `.env` integrations, and Redis/PostgreSQL cloud connections are managed within `deployed_branch`.
+
+---
+
+## Features
+
+* REST API for order submission (`POST /api/orders/execute`)
+* WebSocket updates for live order statuses
+* DEX router that picks the best price between Raydium & Meteora
+* BullMQ queue with 10 concurrent workers
+* Automatic retries (3 attempts, exponential backoff)
+* PostgreSQL persistence for all order data
+* Modular, maintainable architecture
+
+---
+
+## Architecture Overview
 
 ```
 Client (Postman/WebSocket)
@@ -51,33 +67,33 @@ Client (Postman/WebSocket)
         ▼
 Fastify Server
   ├── /api/orders/execute      → Create order & enqueue job
-  ├── /api/orders/updates/:id  → WebSocket live updates
+  ├── /api/orders/updates/:id  → WebSocket updates
   │
   ▼
 BullMQ Worker (Redis)
-  ├── Processes up to 10 orders concurrently
-  ├── Retries failed jobs (3x exponential backoff)
+  ├── Handles 10 concurrent orders
+  ├── Retries failed jobs (3x)
   │
   ▼
 Mock DEX Router
-  ├── Fetches quotes from Raydium & Meteora
-  ├── Selects best price/liquidity
-  ├── Simulates transaction execution
+  ├── Fetches Raydium & Meteora quotes
+  ├── Selects best price
+  ├── Simulates transaction
   │
   ▼
 PostgreSQL (TypeORM)
-  ├── Persists orders + statuses
-  └── Enables order history retrieval
+  ├── Persists orders
+  └── Enables history retrieval
 ```
 
 ---
 
-##  Order Lifecycle
+## Order Lifecycle
 
 | Stage       | Description                                  |
 | ----------- | -------------------------------------------- |
 | `pending`   | Order received and queued                    |
-| `routing`   | Comparing prices between Raydium and Meteora |
+| `routing`   | Comparing prices between Raydium & Meteora   |
 | `best_dex`  | Selected DEX and best price identified       |
 | `building`  | Preparing transaction                        |
 | `submitted` | Simulating on-chain submission               |
@@ -86,30 +102,30 @@ PostgreSQL (TypeORM)
 
 ---
 
-##  Project Structure
+## Project Structure
 
 ```
 src/
 ├── config/
 │   └── db.ts               # PostgreSQL setup (TypeORM)
 ├── entities/
-│   └── Order.ts            # Order entity schema
+│   └── Order.ts            # Order schema
 ├── routes/
 │   ├── pingRoute.ts
-│   └── orderRoute.ts       # REST + WebSocket routes
+│   └── orderRoute.ts       # REST + WebSocket endpoints
 ├── services/
-│   ├── MockDexRouter.ts    # Mock DEX routing logic
-│   ├── OrderQueue.ts       # BullMQ queue and worker
-│   └── webSocketManager.ts # Manages client connections
+│   ├── MockDexRouter.ts    # Mock DEX router
+│   ├── OrderQueue.ts       # Queue + Worker logic
+│   └── webSocketManager.ts # WebSocket client updates
 ├── utils/
-│   ├── helpers.ts          # sleep(), generateOrderId(), etc.
+│   ├── helpers.ts          # sleep(), random IDs, etc.
 │   └── types.ts
-└── index.ts                # Fastify server entrypoint
+└── index.ts                # Fastify entrypoint
 ```
 
 ---
 
-##  Setup Instructions
+## Setup Instructions
 
 ### 1️ Clone & Install
 
@@ -119,19 +135,26 @@ cd order-engine
 npm install
 ```
 
-### 2️ Start Redis & PostgreSQL (Docker)
+### 2️ Environment Variables
+
+Create a `.env` file with your cloud credentials:
+
+```bash
+POSTGRES_HOST=dpg-xxxx.a
+POSTGRES_USER=order_engine_db_user
+POSTGRES_PASSWORD=xxxxxx
+POSTGRES_DB=order_engine_db
+POSTGRES_PORT=5432
+
+UPSTASH_REDIS_REST_URL=https://above-python-28775.upstash.io
+UPSTASH_REDIS_REST_TOKEN=xxxxx
+```
+
+### 3️ Start Redis & PostgreSQL Locally (Optional)
 
 ```bash
 docker run -d --name redis-server -p 6379:6379 redis
 docker run -d --name postgres-db -p 5432:5432 -e POSTGRES_PASSWORD=yash postgres
-```
-
-### 3️ Create Database
-
-```bash
-docker exec -it postgres-db psql -U postgres
-CREATE DATABASE order_engine;
-\q
 ```
 
 ### 4️ Run the Server
@@ -140,18 +163,19 @@ CREATE DATABASE order_engine;
 npm run dev
 ```
 
- You should see:
+You should see:
 
 ```
+ DB ready for OrderQueue
  PostgreSQL connected successfully
-Server running on http://localhost:3000
+ Server running on http://localhost:3000
 ```
 
 ---
 
-##  API Usage
+## API Usage
 
-###  Create Order
+### Create Order
 
 **POST** `/api/orders/execute`
 
@@ -173,14 +197,11 @@ Server running on http://localhost:3000
 }
 ```
 
----
+### WebSocket Updates
 
-###  WebSocket Updates
+**Connect to:** `ws://localhost:3000/api/orders/updates/ORD-ABC123`
 
-**Connect to:**
-`ws://localhost:3000/api/orders/updates/ORD-ABC123`
-
-You’ll receive messages like:
+Messages received:
 
 ```json
 { "status": "pending" }
@@ -193,25 +214,7 @@ You’ll receive messages like:
 
 ---
 
-## Database Schema (TypeORM → PostgreSQL)
-
-| Column      | Type      | Description             |
-| ----------- | --------- | ----------------------- |
-| `id`        | int       | Primary key             |
-| `orderId`   | string    | Unique identifier       |
-| `tokenIn`   | string    | Source token            |
-| `tokenOut`  | string    | Target token            |
-| `amount`    | decimal   | Swap amount             |
-| `dex`       | string    | Chosen DEX              |
-| `txHash`    | string    | Transaction hash        |
-| `status`    | string    | Current order status    |
-| `error`     | string    | Failure reason (if any) |
-| `createdAt` | timestamp | Auto                    |
-| `updatedAt` | timestamp | Auto                    |
-
----
-
-##  Queue Configuration
+## Queue Configuration
 
 * Queue Name: `orders`
 * Concurrency: `10`
@@ -220,28 +223,17 @@ You’ll receive messages like:
 
 ---
 
-##  Logging & Debugging
-
-* All DEX routing and status updates appear in the console.
-* Failed jobs log the reason and retry automatically.
-* Completed orders persist in PostgreSQL.
-
----
-
-##  Testing
+## Testing
 
 **Testing Framework:** Jest
 
-Test cases include:
+Tests cover:
 
 * API validation and responses
-* Order queue behavior
-* Routing logic correctness
-* WebSocket lifecycle updates
-* Error handling & retry mechanism
-* Database persistence and updates
-
-Run tests:
+* Queue behavior and retry
+* DEX routing correctness
+* WebSocket lifecycle
+* Database persistence
 
 ```bash
 npm test
@@ -249,6 +241,11 @@ npm test
 
 ---
 
+### Summary
 
-Backend: Fastify + BullMQ + PostgreSQL
-Mock DEX routing between Raydium & Meteora
+* **Order Type:** Market Order — executes immediately at best price.
+* **Routing:** Raydium vs Meteora (mocked quotes).
+* **Queue:** BullMQ with exponential retry.
+* **WebSocket:** Real-time lifecycle tracking.
+* **Branches:** `main` for development, `deployed_branch` for deployment.
+
