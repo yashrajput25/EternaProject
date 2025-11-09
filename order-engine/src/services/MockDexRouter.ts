@@ -1,7 +1,7 @@
 // src/services/MockDexRouter.ts
 
 
-import { sleep, generateMockTxHash } from "../utils/helpers.js";
+import { sleep, generateMockTxHash } from "../utils/helpers";
 
 
 
