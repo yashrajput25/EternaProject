@@ -28,3 +28,10 @@ describe("Order API", () => {
     expect(response.status).toBe(400);
   });
 });
+
+it("GET /api/orders/history should return array", async () => {
+    const response = await request(app.server).get("/api/orders/history");
+    expect(response.status).toBe(200);
+    expect(Array.isArray(response.body)).toBe(true);
+  });
+  

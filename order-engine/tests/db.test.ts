@@ -16,3 +16,8 @@ test("Database saves order entry", async () => {
   const saved = await repo.save(order);
   expect(saved.id).toBeDefined();
 });
+
+test("Database connection should be initialized", async () => {
+    expect(AppDataSource.isInitialized).toBe(true);
+  });
+  

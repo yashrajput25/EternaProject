@@ -5,3 +5,14 @@ test("WebSocket connection established", done => {
   ws.on("open", () => { ws.close(); done(); });
   ws.on("error", err => done(err));
 });
+
+test("WebSocket should receive message event", (done) => {
+    const ws = new WebSocket("ws://localhost:3000/api/orders/updates/ORD-DEMO");
+    ws.on("message", (msg) => {
+      expect(msg).toBeDefined();
+      ws.close();
+      done();
+    });
+    ws.on("error", (err) => done(err));
+  });
+  
