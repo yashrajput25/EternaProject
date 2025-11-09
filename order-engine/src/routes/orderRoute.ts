@@ -28,7 +28,10 @@ server.post("/orders/execute", async (req, reply) => {
         });
     });
 
-server.get("/orders/updates", { websocket: true }, async (socket, req) => {
+
+
+
+server.get("/orders/updates", { websocket: true },  (socket, req) => {
         console.log("🔌 WebSocket connected");
     
         const router = new MockDexRouter();
@@ -40,29 +43,26 @@ server.get("/orders/updates", { websocket: true }, async (socket, req) => {
         amount: 1.5,
         };
     
-        // Step 1: Pending
-        socket.send(JSON.stringify({ status: "pending" }));
-        await sleep(500);
-    
-        // Step 2: Routing
-        socket.send(JSON.stringify({ status: "routing" }));
-        const bestQuote = await router.getBestQuote(fakeOrder);
-        socket.send(JSON.stringify({ bestDex: bestQuote.dex, bestPrice: bestQuote.price }));
-    
-        // Step 3: Building
-        socket.send(JSON.stringify({ status: "building" }));
-        await sleep(1000);
-    
-        // Step 4: Submitted
-        socket.send(JSON.stringify({ status: "submitted" }));
-    
-        // Step 5: Execute swap
-        const result = await router.executeSwap(fakeOrder, bestQuote.dex);
-    
-        // Step 6: Confirmed
-        socket.send(JSON.stringify({ status: "confirmed", txHash: result.txHash, dex: result.dex }));
-    
-        socket.close();
+        (async () => {
+            socket.send(JSON.stringify({ status: "pending" }));
+            await sleep(500);
+        
+            socket.send(JSON.stringify({ status: "routing" }));
+            const bestQuote = await router.getBestQuote(fakeOrder);
+            socket.send(JSON.stringify({ bestDex: bestQuote.dex, bestPrice: bestQuote.price }));
+        
+            socket.send(JSON.stringify({ status: "building" }));
+            await sleep(1000);
+        
+            socket.send(JSON.stringify({ status: "submitted" }));
+            const result = await router.executeSwap(fakeOrder, bestQuote.dex);
+        
+            socket.send(
+            JSON.stringify({ status: "confirmed", txHash: result.txHash, dex: result.dex })
+            );
+        
+            socket.close();
+        })();
     });
 
 }
