@@ -1,3 +1,6 @@
+import "reflect-metadata";
+import dotenv from "dotenv";
+dotenv.config();
 import Fastify from "fastify";
 import websocketPlugin from "@fastify/websocket";
 import pingRoute from "./routes/pingRoute";
