@@ -23,6 +23,13 @@
         this.queue = new Queue<OrderJob>("orders", { connection });
         this.router = new MockDexRouter();
 
+        // ✅ Initialize DB once to avoid metadata errors
+        if (!AppDataSource.isInitialized) {
+        AppDataSource.initialize()
+            .then(() => console.log("✅ DB ready for OrderQueue"))
+            .catch(console.error);
+        }
+
         this.worker = new Worker<OrderJob, any>(
         "orders",
         async (job: Job<OrderJob>) => {
