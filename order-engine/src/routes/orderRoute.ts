@@ -1,32 +1,43 @@
 import { FastifyInstance } from "fastify";
 import { generateOrderId, sleep, generateMockTxHash } from "../utils/helpers";
 import MockDexRouter from "../services/MockDexRouter";
+import { orderQueue } from "../services/OrderQueue";
 
 
 export default async function orderRoute(server: FastifyInstance) {
-  // POST /api/orders/execute
+
+
+
+    // POST /api/orders/execute
 server.post("/orders/execute", async (req, reply) => {
-    const body = req.body as {
+        const body = req.body as {
         tokenIn?: string;
         tokenOut?: string;
         amount?: number;
         };
-
-        // Validate
+    
         if (!body.tokenIn || !body.tokenOut || !body.amount) {
         return reply.status(400).send({ error: "Missing order parameters" });
         }
-
+    
         // Create Order ID
         const orderId = generateOrderId();
-
-        // Return orderId
+    
+        // Add order to BullMQ queue
+        await orderQueue.addOrder({
+        orderId,
+        tokenIn: body.tokenIn,
+        tokenOut: body.tokenOut,
+        amount: body.amount,
+        });
+    
         return reply.send({
         success: true,
-        message: "Order received successfully",
+        message: "Order added to queue successfully",
         orderId,
         });
-    });
+});
+
 
 
 
