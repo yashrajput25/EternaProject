@@ -46,7 +46,7 @@
             console.log(`🔁 Processing order: ${orderId}`);
             sendUpdate(orderId, { status: "pending" });
 
-            await sleep(500);
+            await sleep(5000);
             console.log("⚙️ Routing...");
             sendUpdate(orderId, { status: "routing" });
             dbOrder.status = "routing";
@@ -59,12 +59,12 @@
                 price: bestQuote.price,
             });
 
-            await sleep(1000);
+            await sleep(5000);
             sendUpdate(orderId, { status: "building" });
             dbOrder.status = "building";
             await repo.save(dbOrder);
 
-            await sleep(500);
+            await sleep(5000);
             sendUpdate(orderId, { status: "submitted" });
             dbOrder.status = "submitted";
             await repo.save(dbOrder);
