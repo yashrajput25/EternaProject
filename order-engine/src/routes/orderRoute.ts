@@ -2,6 +2,8 @@ import { FastifyInstance } from "fastify";
 import { generateOrderId, sleep, generateMockTxHash } from "../utils/helpers";
 import MockDexRouter from "../services/MockDexRouter";
 import { orderQueue } from "../services/OrderQueue";
+import { registerClient, removeClient } from "../utils/webSocketManager";
+
 
 
 export default async function orderRoute(server: FastifyInstance) {
@@ -42,38 +44,14 @@ server.post("/orders/execute", async (req, reply) => {
 
 
 
-server.get("/orders/updates", { websocket: true },  (socket, req) => {
-        console.log("🔌 WebSocket connected");
+server.get("/orders/updates/:orderId", { websocket: true }, (socket, req) => {
+    const { orderId } = req.params as { orderId: string };
+    registerClient(orderId, socket);
     
-        const router = new MockDexRouter();
-    
-        const fakeOrder = {
-        orderId: "ORD-DEMO",
-        tokenIn: "SOL",
-        tokenOut: "USDC",
-        amount: 1.5,
-        };
-    
-        (async () => {
-            socket.send(JSON.stringify({ status: "pending" }));
-            await sleep(500);
-        
-            socket.send(JSON.stringify({ status: "routing" }));
-            const bestQuote = await router.getBestQuote(fakeOrder);
-            socket.send(JSON.stringify({ bestDex: bestQuote.dex, bestPrice: bestQuote.price }));
-        
-            socket.send(JSON.stringify({ status: "building" }));
-            await sleep(1000);
-        
-            socket.send(JSON.stringify({ status: "submitted" }));
-            const result = await router.executeSwap(fakeOrder, bestQuote.dex);
-        
-            socket.send(
-            JSON.stringify({ status: "confirmed", txHash: result.txHash, dex: result.dex })
-            );
-        
-            socket.close();
-        })();
-    });
+        socket.send(JSON.stringify({ status: "connected", orderId }));
+        socket.on("close", () => {
+        removeClient(orderId);
+        });
+});
 
 }
