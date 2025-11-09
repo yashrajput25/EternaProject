@@ -6,7 +6,7 @@ export function sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
   
-  export function generateMockTxHash() {
+export function generateMockTxHash() {
     return "0x" + Math.random().toString(16).substring(2, 10).toUpperCase();
 }
   
