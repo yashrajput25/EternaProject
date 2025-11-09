@@ -7,7 +7,7 @@ It is built using **Node.js, TypeScript, Fastify, BullMQ, Redis, and PostgreSQL*
 
 ---
 
-## ⚙️ Tech Stack
+## Tech Stack
 
 | Component        | Technology                                |
 | ---------------- | ----------------------------------------- |
