@@ -12,7 +12,6 @@ server.register(websocketPlugin);
 server.register(pingRoute, { prefix: "/api" });
 server.register(orderRoute, { prefix: "/api" });
 
-
 // start server
 const start = async () => {
     try {

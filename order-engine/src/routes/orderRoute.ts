@@ -3,6 +3,8 @@ import { generateOrderId, sleep, generateMockTxHash } from "../utils/helpers";
 import MockDexRouter from "../services/MockDexRouter";
 import { orderQueue } from "../services/OrderQueue";
 import { registerClient, removeClient } from "../utils/webSocketManager";
+import { AppDataSource } from "../config/db";
+import { Order } from "../entities/Order";
 
 
 
@@ -53,5 +55,19 @@ server.get("/orders/updates/:orderId", { websocket: true }, (socket, req) => {
         removeClient(orderId);
         });
 });
+
+
+server.get("/orders/history", async (req, reply) => {
+        try {
+        const repo = AppDataSource.getRepository(Order);
+        const orders = await repo.find({
+            order: { createdAt: "DESC" },
+        });
+        return reply.send(orders);
+        } catch (err: any) {
+        console.error("❌ Failed to fetch order history:", err.message);
+        return reply.status(500).send({ error: "Failed to fetch order history" });
+        }
+    });
 
 }
